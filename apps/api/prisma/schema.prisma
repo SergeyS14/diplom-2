@@ -1,0 +1,254 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  PLAYER
+  HOST
+  ADMIN
+}
+
+enum QuestionType {
+  SINGLE
+  MULTIPLE
+  TRUE_FALSE
+}
+
+enum RoundType {
+  STANDARD
+  LIGHTNING
+  FINAL
+}
+
+enum AdType {
+  IMAGE
+  VIDEO
+}
+
+enum SessionStatus {
+  LOBBY
+  ROUND
+  PLAYING
+  QUESTION
+  REVEAL
+  LEADERBOARD
+  AD
+  FINISHED
+}
+
+model User {
+  id             String    @id @default(uuid())
+  email          String    @unique
+  passwordHash   String    @map("password_hash")
+  name           String
+  nickname       String?
+  role           Role      @default(PLAYER)
+  emailVerified  Boolean   @default(false) @map("email_verified")
+  verifyToken    String?   @unique @map("verify_token")
+  verifyTokenExp DateTime? @map("verify_token_exp")
+  avatar         Json?
+  rating         Int       @default(1000)
+  gamesPlayed    Int       @default(0) @map("games_played")
+  wins           Int       @default(0)
+  podiums        Int       @default(0)
+  totalScore     Int       @default(0) @map("total_score")
+  bestScore      Int       @default(0) @map("best_score")
+  correctAnswers Int       @default(0) @map("correct_answers")
+  bestStreak     Int       @default(0) @map("best_streak")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  quizzes        Quiz[]
+  hostedSessions GameSession[]     @relation("SessionHost")
+  sessionPlayers SessionPlayer[]
+  achievements   UserAchievement[]
+  pushSubs       PushSubscription[]
+  ads            Ad[]
+  gameResults    GameResult[]
+
+  @@map("users")
+}
+
+model Quiz {
+  id                  String        @id @default(uuid())
+  ownerId             String        @map("owner_id")
+  owner               User          @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  title               String
+  description         String?
+  coverUrl            String?       @map("cover_url")
+  isPublished         Boolean       @default(false) @map("is_published")
+  defaultQuestionTime Int           @default(20) @map("default_question_time")
+  createdAt           DateTime      @default(now()) @map("created_at")
+  updatedAt           DateTime      @updatedAt @map("updated_at")
+  rounds              Round[]
+  sessions            GameSession[]
+
+  @@map("quizzes")
+}
+
+model Round {
+  id              String     @id @default(uuid())
+  quizId          String     @map("quiz_id")
+  quiz            Quiz       @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  title           String
+  type            RoundType  @default(STANDARD)
+  order           Int
+  showLeaderboard Boolean    @default(true) @map("show_leaderboard")
+  adId            String?    @map("ad_id")
+  ad              Ad?        @relation(fields: [adId], references: [id], onDelete: SetNull)
+  questions       Question[]
+
+  @@index([quizId, order])
+  @@map("rounds")
+}
+
+model Question {
+  id        String           @id @default(uuid())
+  roundId   String           @map("round_id")
+  round     Round            @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  type      QuestionType     @default(SINGLE)
+  text      String
+  mediaUrl  String?          @map("media_url")
+  hint      String?
+  timeLimit Int              @map("time_limit")
+  points    Int              @default(1000)
+  order     Int
+  createdAt DateTime         @default(now()) @map("created_at")
+  options   QuestionOption[]
+  answers   SessionAnswer[]
+
+  @@index([roundId, order])
+  @@map("questions")
+}
+
+model QuestionOption {
+  id         String           @id @default(uuid())
+  questionId String           @map("question_id")
+  question   Question         @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  text       String
+  isCorrect  Boolean          @default(false) @map("is_correct")
+  order      Int
+  color      String?
+  answers    SessionAnswer[]
+
+  @@index([questionId, order])
+  @@map("question_options")
+}
+
+model Ad {
+  id          String   @id @default(uuid())
+  ownerId     String?  @map("owner_id")
+  owner       User?    @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  title       String
+  type        AdType   @default(IMAGE)
+  mediaUrl    String   @default("") @map("media_url")
+  body        String   @default("")
+  cta         String?
+  durationSec Int      @map("duration_sec")
+  createdAt   DateTime @default(now()) @map("created_at")
+  rounds      Round[]
+
+  @@map("ads")
+}
+
+model GameSession {
+  id                String          @id @default(uuid())
+  quizId            String          @map("quiz_id")
+  quiz              Quiz            @relation(fields: [quizId], references: [id], onDelete: Restrict)
+  hostUserId        String?         @map("host_user_id")
+  host              User?           @relation("SessionHost", fields: [hostUserId], references: [id], onDelete: SetNull)
+  code              String          @unique
+  status            SessionStatus   @default(LOBBY)
+  currentQuestionId String?         @map("current_question_id")
+  settings          Json?
+  startedAt         DateTime?       @map("started_at")
+  finishedAt        DateTime?       @map("finished_at")
+  createdAt         DateTime        @default(now()) @map("created_at")
+  players           SessionPlayer[]
+  answers           SessionAnswer[]
+
+  @@index([status])
+  @@map("game_sessions")
+}
+
+model SessionPlayer {
+  id          String          @id @default(uuid())
+  sessionId   String          @map("session_id")
+  session     GameSession     @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  userId      String?         @map("user_id")
+  user        User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+  nickname    String
+  avatar      Json?
+  medals      String[]        @default([])
+  score       Int             @default(0)
+  streak      Int             @default(0)
+  maxStreak   Int             @default(0) @map("max_streak")
+  connected   Boolean         @default(true)
+  playerToken String          @unique @map("player_token")
+  joinedAt    DateTime        @default(now()) @map("joined_at")
+  answers     SessionAnswer[]
+
+  @@index([sessionId])
+  @@map("session_players")
+}
+
+model SessionAnswer {
+  id            String          @id @default(uuid())
+  sessionId     String          @map("session_id")
+  session       GameSession     @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  playerId      String          @map("player_id")
+  player        SessionPlayer   @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  questionId    String          @map("question_id")
+  question      Question        @relation(fields: [questionId], references: [id], onDelete: Restrict)
+  optionId      String?         @map("option_id")
+  option        QuestionOption? @relation(fields: [optionId], references: [id], onDelete: SetNull)
+  isCorrect     Boolean         @map("is_correct")
+  timeMs        Int             @map("time_ms")
+  pointsAwarded Int             @map("points_awarded")
+  createdAt     DateTime        @default(now()) @map("created_at")
+
+  @@unique([sessionId, playerId, questionId])
+  @@map("session_answers")
+}
+
+model GameResult {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  quizTitle String   @map("quiz_title")
+  score     Int
+  place     Int
+  players   Int
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId, createdAt])
+  @@map("game_results")
+}
+
+model UserAchievement {
+  userId        String   @map("user_id")
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievementId String   @map("achievement_id")
+  unlockedAt    DateTime @default(now()) @map("unlocked_at")
+
+  @@id([userId, achievementId])
+  @@map("user_achievements")
+}
+
+model PushSubscription {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([userId, endpoint])
+  @@map("push_subscriptions")
+}

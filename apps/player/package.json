@@ -1,0 +1,29 @@
+{
+  "name": "@quiz/player",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@quiz/shared": "*",
+    "@quiz/ui": "*",
+    "pinia": "^3.0.2",
+    "socket.io-client": "^4.8.1",
+    "vue": "^3.5.13",
+    "vue-router": "^4.5.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.7",
+    "@vitejs/plugin-vue": "^5.2.3",
+    "typescript": "^5.8.2",
+    "tailwindcss": "^4.1.7",
+    "vite": "^6.3.5",
+    "vite-plugin-pwa": "^0.21.2",
+    "vue-tsc": "^2.2.10",
+    "workbox-precaching": "^7.3.0"
+  }
+}

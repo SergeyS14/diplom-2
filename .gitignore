@@ -1,0 +1,17 @@
+node_modules
+dist
+.env
+.npm-cache
+*.log
+.DS_Store
+coverage
+.turbo
+*.tsbuildinfo
+
+# Prisma
+apps/api/prisma/*.db
+apps/api/prisma/*.db-journal
+
+# Vite
+apps/tv/dev-dist
+apps/player/dev-dist

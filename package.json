@@ -1,0 +1,25 @@
+{
+  "name": "quiz-diplom",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Онлайн-квиз: TV-экран + PWA игроков, NestJS и WebSocket",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run build -w @quiz/shared && concurrently -n shared,api,tv,player -c cyan,green,magenta,yellow \"npm run dev -w @quiz/shared\" \"npm run start:dev -w @quiz/api\" \"npm run dev -w @quiz/tv\" \"npm run dev -w @quiz/player\"",
+    "dev:infra": "docker compose up -d",
+    "setup": "docker compose up -d && node -e \"setTimeout(()=>process.exit(0), 4000)\" && npm run prisma:deploy -w @quiz/api && npm run prisma:seed -w @quiz/api",
+    "db:migrate": "npm run prisma:migrate -w @quiz/api",
+    "db:seed": "npm run prisma:seed -w @quiz/api",
+    "db:reset": "npm run prisma:reset -w @quiz/api",
+    "build": "npm run build -w @quiz/shared && npm run build --workspaces --if-present"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
