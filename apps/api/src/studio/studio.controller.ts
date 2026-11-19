@@ -1,13 +1,27 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { CanActivate, ExecutionContext, Injectable, Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { GameService } from '../game/game.service';
 import { StudioService } from './studio.service';
 import { JwtGuard } from '../auth/jwt.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { AuthUser } from '../auth/jwt.guard';
 
+@Injectable()
+export class StudioAccessGuard implements CanActivate {
+  canActivate(context: ExecutionContext) {
+    const user = context.switchToHttp().getRequest().user as AuthUser;
+    return user.role === 'ADMIN' && user.emailVerified;
+  }
+}
+
 @Controller('studio')
-@UseGuards(JwtGuard)
+@UseGuards(JwtGuard, StudioAccessGuard)
 export class StudioController {
-  constructor(private readonly studio: StudioService) {}
+  constructor(private readonly studio: StudioService, private readonly game: GameService) {}
+
+  @Get('broadcasts')
+  broadcasts() {
+    return this.game.liveBroadcasts();
+  }
 
   @Get('quizzes')
   list(@CurrentUser() user: AuthUser) {
@@ -28,7 +42,7 @@ export class StudioController {
   update(
     @CurrentUser() user: AuthUser,
     @Param('id') id: string,
-    @Body() body: { title?: string; description?: string; defaultQuestionTime?: number; isPublished?: boolean },
+    @Body() body: { title?: string; description?: string; defaultQuestionTime?: number; broadcastOrder?: number; isPublished?: boolean },
   ) {
     return this.studio.updateQuiz(user, id, body);
   }
@@ -89,6 +103,7 @@ export class StudioController {
     body: {
       text?: string;
       hint?: string | null;
+      mediaUrl?: string | null;
       timeLimit?: number;
       points?: number;
       type?: 'SINGLE' | 'TRUE_FALSE';

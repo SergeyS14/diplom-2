@@ -1,9 +1,14 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, onErrorCaptured, ref } from 'vue';
 import { RouterLink, RouterView, useRoute } from 'vue-router';
 import { useGameStore } from './stores/game';
 import { useAuthStore } from './stores/auth';
 
+const actionError = ref('');
+onErrorCaptured((err) => {
+  actionError.value = err instanceof Error ? err.message : 'Не удалось выполнить действие';
+  return false;
+});
 const game = useGameStore();
 const auth = useAuthStore();
 const route = useRoute();
@@ -23,6 +28,9 @@ const wide = computed(() => Boolean(route.meta.wide));
       <RouterLink v-if="auth.user?.role === 'ADMIN'" to="/studio" class="rounded-full bg-white/15 px-3 py-1">Студия</RouterLink>
       <span class="ml-auto text-xs text-white/60">{{ auth.user?.nickname || auth.user?.name || 'гость' }}</span>
     </nav>
+    <div v-if="actionError" role="alert" class="m-4 flex justify-between gap-3 rounded-xl bg-red-950 p-4">
+      {{ actionError }} <button aria-label="Закрыть сообщение" @click="actionError = ''">×</button>
+    </div>
     <RouterView />
     <p
       v-if="!game.connected"

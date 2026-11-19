@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import QuestionImage from '@quiz/ui/QuestionImage.vue';
+import AdMedia from '@quiz/ui/AdMedia.vue';
 import { computed, onMounted, ref, watch } from 'vue';
 import QRCode from 'qrcode';
 import { storeToRefs } from 'pinia';
@@ -13,7 +15,7 @@ const { room, question, reveal, accepted, podium, error, roundInfo, board, ad } 
 const qr = ref('');
 
 const playerUrl = computed(() => {
-  const base = import.meta.env.VITE_PLAYER_URL || 'http://localhost:5174';
+  const base = import.meta.env.VITE_PLAYER_URL || window.location.protocol + '//' + window.location.hostname + ':5174';
   const code = room.value?.code ?? '';
   return `${base}/join/${code}`;
 });
@@ -114,7 +116,7 @@ async function backToMenu() {
           </div>
           <div v-if="room.players.length === 0" class="text-3xl text-white/40">Пока никого…</div>
         </div>
-        <p class="mt-14 text-xl text-white/50">Шоу само начнётся через несколько секунд после первого игрока</p>
+        <p class="mt-14 text-xl text-white/50">Следующая игра начнётся автоматически</p>
         <p v-if="error" class="mt-6 text-xl text-red-300">{{ error }}</p>
       </div>
       <div class="flex flex-col items-center justify-center rounded-[2.5rem] bg-white p-8 text-[#070b16]">
@@ -136,6 +138,7 @@ async function backToMenu() {
           {{ remaining }}
         </div>
       </div>
+      <QuestionImage v-if="question.mediaUrl" :key="question.mediaUrl" :url="question.mediaUrl" class="mt-4 max-h-56" />
       <p
         v-if="hintVisible"
         class="mt-6 max-w-4xl rounded-[1.5rem] bg-amber-300/15 px-6 py-4 text-3xl font-extrabold text-amber-200"
@@ -159,6 +162,7 @@ async function backToMenu() {
 
     <section v-else-if="room.status === 'reveal' && question && reveal" class="mt-8 flex flex-1 flex-col">
       <h2 class="font-display text-4xl">{{ question.text }}</h2>
+      <QuestionImage v-if="question.mediaUrl" :key="question.mediaUrl" :url="question.mediaUrl" class="mt-4 max-h-56" />
       <div class="mt-8 grid grid-cols-2 gap-6">
         <div
           v-for="option in question.options"
@@ -206,14 +210,8 @@ async function backToMenu() {
 
     <section v-else-if="room.status === 'ad'" class="flex flex-1 flex-col items-center justify-center text-center">
       <p class="uppercase tracking-[0.5em] text-amber-300">Реклама</p>
-      <h2 class="font-display mt-6 text-7xl">{{ ad?.title || 'Тут могла быть ваша реклама' }}</h2>
-      <img v-if="ad?.mediaUrl" :src="ad.mediaUrl" alt="" class="mt-8 max-h-72 rounded-3xl object-contain" />
-      <div
-        v-else
-        class="mt-8 flex h-72 w-full max-w-4xl items-center justify-center rounded-[2.5rem] border-4 border-dashed border-white/25 bg-white/5"
-      >
-        <p class="font-display px-8 text-5xl text-white/35">Тут могла быть ваша реклама</p>
-      </div>
+      <h2 class="font-display mt-6 text-7xl">{{ ad?.title }}</h2>
+      <AdMedia v-if="ad?.mediaUrl" :url="ad.mediaUrl" />
       <p class="mt-6 max-w-4xl text-3xl text-white/70">{{ ad?.body }}</p>
       <p v-if="ad?.cta" class="mt-10 rounded-full bg-white px-10 py-4 text-2xl font-black text-black">{{ ad.cta }}</p>
     </section>

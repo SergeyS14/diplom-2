@@ -15,6 +15,7 @@ import {
 import { socket } from '../socket';
 
 export const useGameStore = defineStore('game', () => {
+  let screenPassword = '';
   const connected = ref(socket.connected);
   const error = ref('');
   const room = ref<RoomStatePayload | null>(null);
@@ -31,6 +32,7 @@ export const useGameStore = defineStore('game', () => {
   function bind() {
     socket.on('connect', () => {
       connected.value = true;
+      if (room.value && screenPassword) void joinAsTv(room.value.code, screenPassword);
     });
     socket.on('disconnect', () => {
       connected.value = false;
@@ -76,6 +78,7 @@ export const useGameStore = defineStore('game', () => {
       error.value = ack.error ?? 'Не удалось создать комнату';
       return false;
     }
+    screenPassword = tvPassword;
     room.value = ack.data.state;
     question.value = null;
     reveal.value = null;
@@ -94,6 +97,7 @@ export const useGameStore = defineStore('game', () => {
       error.value = ack.error ?? 'Не удалось подключить экран';
       return false;
     }
+    screenPassword = tvPassword;
     room.value = ack.data.state;
     return true;
   }
@@ -124,6 +128,7 @@ export const useGameStore = defineStore('game', () => {
     } catch {
       /* still clear locally */
     }
+    screenPassword = '';
     room.value = null;
     question.value = null;
     reveal.value = null;

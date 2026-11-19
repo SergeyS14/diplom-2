@@ -54,11 +54,10 @@ export class AuthService {
         verifyTokenExp: new Date(Date.now() + 1000 * 60 * 60 * 24),
       },
     });
-    const verifyUrl = await this.mail.sendVerifyEmail(user.email, token);
+    await this.mail.sendVerifyEmail(user.email, token);
     return {
       accessToken: this.sign(user),
       user: await this.toPublic(user.id),
-      verifyUrl,
     };
   }
 
@@ -102,9 +101,9 @@ export class AuthService {
       },
     });
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: auth.id } });
-    const verifyUrl = await this.mail.sendVerifyEmail(user.email, token);
+    await this.mail.sendVerifyEmail(user.email, token);
     await this.push.sendVerify(user.id, token);
-    return { ok: true, verifyUrl };
+    return { ok: true };
   }
 
   async me(auth: AuthUser) {

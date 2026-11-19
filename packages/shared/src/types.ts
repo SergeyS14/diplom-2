@@ -67,6 +67,7 @@ export interface RoomJoinPayload {
 }
 
 export interface RoomJoinResult {
+  pickedOptionId?: string;
   playerId?: string;
   token?: string;
   state: RoomStatePayload;

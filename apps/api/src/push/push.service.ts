@@ -2,7 +2,6 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as webpush from 'web-push';
 import { PrismaService } from '../prisma/prisma.service';
-import { MailService } from '../mail/mail.service';
 
 @Injectable()
 export class PushService {
@@ -12,7 +11,6 @@ export class PushService {
   constructor(
     private readonly config: ConfigService,
     private readonly prisma: PrismaService,
-    private readonly mail: MailService,
   ) {
     const publicKey = this.config.get<string>('VAPID_PUBLIC_KEY') || '';
     const privateKey = this.config.get<string>('VAPID_PRIVATE_KEY') || '';
@@ -53,7 +51,6 @@ export class PushService {
     if (!this.enabled) {
       return;
     }
-    const url = this.mail.verifyUrl(token);
     const rows = await this.prisma.pushSubscription.findMany({ where: { userId } });
     const payload = JSON.stringify({
       title: 'Квиз',
@@ -73,6 +70,6 @@ export class PushService {
         this.logger.warn(`Push fail ${row.endpoint}: ${String(err)}`);
       }
     }
-    this.logger.log(`Verify push (${rows.length}) url=${url}`);
+    this.logger.log(`Verify push (${rows.length})`);
   }
 }

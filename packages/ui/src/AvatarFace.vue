@@ -37,7 +37,6 @@ const hairColor = '#3D2314';
       </clipPath>
     </defs>
 
-    <!-- long hair only to the sides of the face -->
     <g v-if="a.hair === 'long'" :fill="hairColor" :mask="`url(#${faceHole})`">
       <path d="M28 50 C16 58 18 96 30 112 C36 100 38 72 36 56 C34 50 30 48 28 50 Z" />
       <path d="M92 50 C104 58 102 96 90 112 C84 100 82 72 84 56 C86 50 90 48 92 50 Z" />

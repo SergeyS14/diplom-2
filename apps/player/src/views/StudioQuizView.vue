@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import QuestionImage from '@quiz/ui/QuestionImage.vue';
 import { OPTION_COLORS } from '@quiz/shared';
 import { api } from '../api';
 import { useAuthStore } from '../stores/auth';
@@ -15,6 +16,7 @@ interface Question {
   id: string;
   text: string;
   hint: string;
+  mediaUrl: string | null;
   timeLimit: number;
   points: number;
   type: string;
@@ -40,6 +42,7 @@ interface Quiz {
   id: string;
   title: string;
   description: string | null;
+  broadcastOrder: number;
   defaultQuestionTime: number;
   isPublished: boolean;
   rounds: Round[];
@@ -66,7 +69,7 @@ async function load() {
 
 onMounted(async () => {
   if (!auth.token) {
-    await router.replace('/login');
+    await router.replace({ path: '/login', query: { next: router.currentRoute.value.fullPath } });
     return;
   }
   await load();
@@ -114,6 +117,7 @@ async function saveQuestion(q: Question) {
     json: {
       text: q.text,
       hint: q.hint?.trim() || null,
+      mediaUrl: q.mediaUrl?.trim() || null,
       timeLimit: q.timeLimit,
       points: q.points,
       type: q.type,
@@ -175,10 +179,31 @@ async function removeQuestion(id: string) {
   quiz.value = await api<Quiz>(`/studio/questions/${id}`, { method: 'DELETE' });
 }
 
+const editingAd = ref('');
+function selectAd() {
+  const ad = ads.value.find(item => item.id === editingAd.value);
+  newAd.value = {
+    title: ad?.title ?? '',
+    body: ad?.body ?? '',
+    mediaUrl: ad?.mediaUrl ?? '',
+    cta: ad?.cta ?? '',
+    durationSec: ad?.durationSec ?? 14,
+  };
+}
+
+async function removeAd() {
+  if (!editingAd.value || !window.confirm('Удалить рекламу из библиотеки и всех раундов?')) return;
+  await api('/studio/ads/' + editingAd.value, { method: 'DELETE' });
+  editingAd.value = '';
+  selectAd();
+  await load();
+}
+
 async function createAd() {
-  await api('/studio/ads', { method: 'POST', json: newAd.value });
+  const url = editingAd.value ? '/studio/ads/' + editingAd.value : '/studio/ads';
+  await api(url, { method: editingAd.value ? 'PATCH' : 'POST', json: newAd.value });
   ads.value = await api<Ad[]>('/studio/ads');
-  msg.value = 'Реклама добавлена';
+  msg.value = 'Реклама сохранена';
 }
 </script>
 
@@ -188,11 +213,12 @@ async function createAd() {
     <div class="mt-4 grid gap-3">
       <input v-model="quiz.title" class="rounded-2xl bg-white/15 px-4 py-3 text-2xl font-black outline-none" />
       <textarea v-model="quiz.description" class="rounded-2xl bg-white/15 px-4 py-3 outline-none" rows="2" />
+      <label class="text-sm">Позиция в эфире <input v-model.number="quiz.broadcastOrder" type="number" min="1" max="9999" class="ml-2 w-20 rounded bg-white/15 px-2 py-1" /></label>
       <label class="text-sm">Секунд на вопрос по умолчанию
         <input v-model.number="quiz.defaultQuestionTime" type="number" class="ml-2 w-20 rounded bg-white/15 px-2 py-1" />
       </label>
       <div class="flex flex-wrap gap-2">
-        <button class="rounded-full bg-white/15 px-4 py-2 font-black" @click="patchQuiz({ title: quiz.title, description: quiz.description, defaultQuestionTime: quiz.defaultQuestionTime })">
+        <button class="rounded-full bg-white/15 px-4 py-2 font-black" @click="patchQuiz({ broadcastOrder: quiz.broadcastOrder, title: quiz.title, description: quiz.description, defaultQuestionTime: quiz.defaultQuestionTime })">
           Сохранить карточку
         </button>
         <button
@@ -206,7 +232,11 @@ async function createAd() {
     </div>
     <p v-if="msg" class="mt-3 text-yellow-200">{{ msg }}</p>
 
-    <h2 class="mt-10 text-2xl font-black">Реклама</h2>
+    <h2 class="mt-10 text-2xl font-black">Рекламная библиотека</h2>
+    <select v-model="editingAd" aria-label="Карточка рекламы" class="mt-3 rounded-xl bg-black/30 px-3 py-2" @change="selectAd">
+      <option value="">Новая карточка</option>
+      <option v-for="ad in ads" :key="ad.id" :value="ad.id">{{ ad.title }}</option>
+    </select>
     <div class="mt-3 grid gap-2 md:grid-cols-2">
       <input v-model="newAd.title" class="rounded-xl bg-white/15 px-3 py-2" placeholder="Заголовок" />
       <input v-model.number="newAd.durationSec" type="number" class="rounded-xl bg-white/15 px-3 py-2" placeholder="Секунд" />
@@ -214,7 +244,8 @@ async function createAd() {
       <input v-model="newAd.mediaUrl" class="rounded-xl bg-white/15 px-3 py-2" placeholder="URL картинки или ролика" />
       <input v-model="newAd.cta" class="rounded-xl bg-white/15 px-3 py-2" placeholder="Кнопка CTA" />
     </div>
-    <button class="mt-2 rounded-xl bg-white/20 px-4 py-2 font-black" @click="createAd">Добавить рекламу</button>
+    <button class="mt-2 rounded-xl bg-white/20 px-4 py-2 font-black" @click="createAd">{{ editingAd ? 'Сохранить рекламу' : 'Добавить рекламу' }}</button>
+    <button v-if="editingAd" class="ml-4 underline" @click="removeAd">Удалить рекламу</button>
     <p v-if="ads.length" class="mt-3 text-sm text-white/60">В библиотеке: {{ ads.map((a) => a.title).join(', ') }}</p>
 
     <div class="mt-8 flex items-center justify-between">
@@ -253,6 +284,11 @@ async function createAd() {
 
       <article v-for="q in round.questions" :key="q.id" class="mt-4 rounded-2xl bg-black/20 p-3">
         <textarea v-model="q.text" class="w-full rounded-xl bg-white/10 px-3 py-2 outline-none" rows="2" />
+        <label class="mt-3 block text-sm">
+          Ссылка на картинку
+          <input v-model.trim="q.mediaUrl" type="url" class="mt-1 w-full rounded-xl bg-white/10 px-3 py-2" placeholder="https://example.org/photo.jpg" />
+        </label>
+        <QuestionImage v-if="q.mediaUrl" :key="q.mediaUrl" :url="q.mediaUrl" class="mt-2 max-h-40" />
         <input
           :value="q.hint || ''"
           class="mt-2 w-full rounded-xl bg-white/10 px-3 py-2 text-sm outline-none"

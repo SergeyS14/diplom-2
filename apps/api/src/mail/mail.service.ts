@@ -38,7 +38,7 @@ export class MailService {
       });
       this.logger.log(`Verify mail → ${to}`);
     } catch (err) {
-      this.logger.warn(`Почта недоступна, ссылка для ${to}: ${url}`);
+      this.logger.warn(`Не удалось отправить письмо подтверждения`);
       this.logger.warn(String(err));
     }
     return url;

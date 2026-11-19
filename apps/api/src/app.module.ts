@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { PrismaModule } from './prisma/prisma.module';
-import { RedisModule } from './redis/redis.module';
 import { HealthModule } from './health/health.module';
 import { QuizzesModule } from './quizzes/quizzes.module';
 import { GameModule } from './game/game.module';
@@ -13,7 +12,6 @@ import { StatsModule } from './stats/stats.module';
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     PrismaModule,
-    RedisModule,
     AuthModule,
     HealthModule,
     QuizzesModule,

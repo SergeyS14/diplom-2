@@ -1,13 +1,9 @@
 import { Controller, Get } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { RedisService } from '../redis/redis.service';
 
 @Controller('health')
 export class HealthController {
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly redis: RedisService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   @Get()
   async check() {
@@ -19,12 +15,9 @@ export class HealthController {
       db = false;
     }
 
-    const redis = await this.redis.ping();
-
     return {
       ok: db,
       db,
-      redis,
     };
   }
 }

@@ -10,14 +10,17 @@
   "scripts": {
     "dev": "npm run build -w @quiz/shared && concurrently -n shared,api,tv,player -c cyan,green,magenta,yellow \"npm run dev -w @quiz/shared\" \"npm run start:dev -w @quiz/api\" \"npm run dev -w @quiz/tv\" \"npm run dev -w @quiz/player\"",
     "dev:infra": "docker compose up -d",
-    "setup": "docker compose up -d && node -e \"setTimeout(()=>process.exit(0), 4000)\" && npm run prisma:deploy -w @quiz/api && npm run prisma:seed -w @quiz/api",
+    "setup": "npm run build -w @quiz/shared && docker compose up -d --wait && npm run prisma:deploy -w @quiz/api && npm run prisma:seed -w @quiz/api",
     "db:migrate": "npm run prisma:migrate -w @quiz/api",
     "db:seed": "npm run prisma:seed -w @quiz/api",
     "db:reset": "npm run prisma:reset -w @quiz/api",
-    "build": "npm run build -w @quiz/shared && npm run build --workspaces --if-present"
+    "build": "npm run build -w @quiz/shared && npm run build --workspaces --if-present",
+    "test": "npm run build -w @quiz/shared && node --test tests/unit.test.cjs",
+    "test:integration": "npm run build -w @quiz/shared && npm run build -w @quiz/api && node --test tests/broadcast.test.cjs"
   },
   "devDependencies": {
-    "concurrently": "^9.1.2"
+    "concurrently": "^9.1.2",
+    "playwright-core": "^1.56.1"
   },
   "engines": {
     "node": ">=20"

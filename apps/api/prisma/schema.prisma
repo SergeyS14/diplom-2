@@ -80,6 +80,7 @@ model Quiz {
   owner               User          @relation(fields: [ownerId], references: [id], onDelete: Restrict)
   title               String
   description         String?
+  broadcastOrder      Int           @default(100) @map("broadcast_order")
   coverUrl            String?       @map("cover_url")
   isPublished         Boolean       @default(false) @map("is_published")
   defaultQuestionTime Int           @default(20) @map("default_question_time")
@@ -120,7 +121,6 @@ model Question {
   order     Int
   createdAt DateTime         @default(now()) @map("created_at")
   options   QuestionOption[]
-  answers   SessionAnswer[]
 
   @@index([roundId, order])
   @@map("questions")
@@ -134,7 +134,6 @@ model QuestionOption {
   isCorrect  Boolean          @default(false) @map("is_correct")
   order      Int
   color      String?
-  answers    SessionAnswer[]
 
   @@index([questionId, order])
   @@map("question_options")
@@ -204,15 +203,15 @@ model SessionAnswer {
   playerId      String          @map("player_id")
   player        SessionPlayer   @relation(fields: [playerId], references: [id], onDelete: Cascade)
   questionId    String          @map("question_id")
-  question      Question        @relation(fields: [questionId], references: [id], onDelete: Restrict)
   optionId      String?         @map("option_id")
-  option        QuestionOption? @relation(fields: [optionId], references: [id], onDelete: SetNull)
   isCorrect     Boolean         @map("is_correct")
   timeMs        Int             @map("time_ms")
   pointsAwarded Int             @map("points_awarded")
   createdAt     DateTime        @default(now()) @map("created_at")
 
-  @@unique([sessionId, playerId, questionId])
+  cycle         Int             @default(1)
+
+  @@unique([sessionId, playerId, questionId, cycle], map: "session_answer_cycle_key")
   @@map("session_answers")
 }
 

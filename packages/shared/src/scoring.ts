@@ -6,7 +6,6 @@ export interface ScoreInput {
   streak: number;
 }
 
-/** Kahoot-подобная формула: база + бонус за скорость + стрик. */
 export function calcPoints({
   isCorrect,
   timeMs,

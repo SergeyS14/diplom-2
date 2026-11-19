@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import QuestionImage from '@quiz/ui/QuestionImage.vue';
+import AdMedia from '@quiz/ui/AdMedia.vue';
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useRouter } from 'vue-router';
@@ -119,6 +121,7 @@ async function logout() {
         <p class="rounded-full bg-amber-300 px-3 py-1 text-lg font-black text-[#46178f]">{{ remaining }}</p>
       </div>
       <p class="mt-3 text-2xl font-black leading-tight">{{ question.text }}</p>
+      <QuestionImage v-if="question.mediaUrl" :key="question.mediaUrl" :url="question.mediaUrl" class="mt-4 max-h-48" />
       <p
         v-if="hintVisible"
         class="mt-3 rounded-2xl bg-yellow-400/20 px-4 py-3 text-lg font-extrabold text-yellow-100"
@@ -164,10 +167,8 @@ async function logout() {
 
     <section v-else-if="room.status === 'ad'" class="mt-16 text-center">
       <p class="text-sm uppercase tracking-widest text-yellow-300">Реклама</p>
-      <p class="mt-4 text-3xl font-black">{{ ad?.title || 'Тут могла быть ваша реклама' }}</p>
-      <div class="mx-auto mt-6 flex min-h-32 max-w-sm items-center justify-center rounded-3xl border-2 border-dashed border-white/30 bg-white/5 px-4 py-8">
-        <p class="text-lg font-extrabold text-white/50">Тут могла быть ваша реклама</p>
-      </div>
+      <p class="mt-4 text-3xl font-black">{{ ad?.title }}</p>
+      <AdMedia v-if="ad?.mediaUrl" :url="ad.mediaUrl" />
       <p class="mt-3 text-white/70">{{ ad?.body }}</p>
       <p class="mt-8 text-white/50">Смотри большой экран</p>
     </section>

@@ -33,7 +33,7 @@ const REVEAL_MS = 8_000;
 const LEADERBOARD_MS = 12_000;
 const PODIUM_MS = 18_000;
 const LOBBY_AUTOSTART_MS = 10_000;
-const AD_MIN_SEC = 14;
+const AD_MIN_SEC = 1;
 
 export class GameError extends Error {
   constructor(
@@ -95,6 +95,7 @@ interface LivePlayer {
   correctInRound: number;
   hadPerfectRound: boolean;
   correctThisMatch: number;
+  answeredThisMatch: boolean;
 }
 
 interface RoundAnswer {
@@ -105,6 +106,9 @@ interface RoundAnswer {
 }
 
 interface LiveRoom {
+  cycle: number;
+  lastQuestion?: QuestionShowPayload;
+  scene?: { event: string; payload: unknown };
   code: string;
   sessionId: string;
   quizId: string;
@@ -188,6 +192,15 @@ export class GameService {
     };
   }
 
+  liveBroadcasts() {
+    return [...this.rooms.values()]
+      .filter(room => room.tvSocketIds.size || [...room.players.values()].some(player => player.connected))
+      .map(room => ({
+        code: room.code, title: room.quizTitle, status: room.status, round: room.roundTitle,
+        players: [...room.players.values()].filter(player => player.connected).length,
+      }));
+  }
+
   getRoomBySocket(socketId: string) {
     const code = this.socketRooms.get(socketId);
     return code ? this.rooms.get(code) : undefined;
@@ -219,6 +232,7 @@ export class GameService {
     });
 
     const room: LiveRoom = {
+      cycle: 1,
       code,
       sessionId: session.id,
       quizId: quiz.id,
@@ -245,6 +259,7 @@ export class GameService {
 
     this.rooms.set(code, room);
     this.socketRooms.set(socketId, code);
+    this.scheduleAutoStart(room);
 
     return { code, state: this.toPublicState(room) };
   }
@@ -259,6 +274,7 @@ export class GameService {
     if (params.role === 'tv') {
       this.assertTvPassword(params.tvPassword);
       room.tvSocketIds.add(socketId);
+      this.scheduleAutoStart(room);
       this.socketRooms.set(socketId, code);
       return { state: this.toPublicState(room) };
     }
@@ -270,6 +286,8 @@ export class GameService {
     if (params.token) {
       const existing = [...room.players.values()].find((p) => p.token === params.token);
       if (existing) {
+        room.socketToPlayer.delete(existing.socketId);
+        this.socketRooms.delete(existing.socketId);
         existing.socketId = socketId;
         existing.connected = true;
         room.socketToPlayer.set(socketId, existing.id);
@@ -282,6 +300,7 @@ export class GameService {
         return {
           playerId: existing.id,
           token: existing.token,
+          pickedOptionId: room.answersThisRound.get(existing.id)?.optionId,
           state: this.toPublicState(room),
         };
       }
@@ -344,6 +363,7 @@ export class GameService {
       correctInRound: 0,
       hadPerfectRound: false,
       correctThisMatch: 0,
+      answeredThisMatch: false,
     };
 
     room.players.set(player.id, player);
@@ -424,6 +444,7 @@ export class GameService {
       streak: player.streak,
     });
 
+    player.answeredThisMatch = true;
     player.score += points;
     player.streak = nextStreak;
     player.maxStreak = Math.max(player.maxStreak, nextStreak);
@@ -446,6 +467,7 @@ export class GameService {
         sessionId: room.sessionId,
         playerId,
         questionId: question.id,
+        cycle: room.cycle,
         optionId: option.id,
         isCorrect: correct,
         timeMs,
@@ -551,8 +573,8 @@ export class GameService {
           include: quizInclude,
         })
       : await this.prisma.quiz.findFirst({
-          where: { isPublished: true },
-          orderBy: { createdAt: 'asc' },
+          where: { isPublished: true, rounds: { some: { questions: { some: {} } } } },
+          orderBy: [{ broadcastOrder: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
           include: quizInclude,
         });
 
@@ -601,18 +623,18 @@ export class GameService {
       if (round.showLeaderboard) {
         timeline.push({ kind: 'leaderboard', title: `Рейтинг · ${round.title}`, roundId: round.id });
       }
-      timeline.push({
-        kind: 'ad',
-        ad: round.ad
-          ? {
-              title: round.ad.title,
-              body: round.ad.body,
-              mediaUrl: round.ad.mediaUrl,
-              cta: round.ad.cta,
-              durationSec: Math.max(Number(round.ad.durationSec) || AD_MIN_SEC, AD_MIN_SEC),
-            }
-          : placeholderAd(round.title),
-      });
+      if (round.ad) {
+        timeline.push({
+          kind: 'ad',
+          ad: {
+            title: round.ad.title,
+            body: round.ad.body,
+            mediaUrl: round.ad.mediaUrl,
+            cta: round.ad.cta,
+            durationSec: Math.max(round.ad.durationSec, AD_MIN_SEC),
+          },
+        });
+      }
     });
 
     return {
@@ -664,6 +686,7 @@ export class GameService {
         type: beat.type,
       };
       this.emitState(room);
+      room.scene = { event: WS_EVENTS.ROUND_SHOW, payload };
       this.broadcasts?.emitToRoom(room.code, WS_EVENTS.ROUND_SHOW, payload);
       room.timer = setTimeout(() => {
         this.advance(room).catch((err) => this.logger.error(err));
@@ -684,6 +707,7 @@ export class GameService {
         players: this.playersPublic(room),
       };
       this.emitState(room);
+      room.scene = { event: WS_EVENTS.LEADERBOARD, payload };
       this.broadcasts?.emitToRoom(room.code, WS_EVENTS.LEADERBOARD, payload);
       room.timer = setTimeout(() => {
         this.advance(room).catch((err) => this.logger.error(err));
@@ -696,6 +720,7 @@ export class GameService {
     await this.persistStatus(room, 'ad');
     const payload: AdShowPayload = beat.ad;
     this.emitState(room);
+    room.scene = { event: WS_EVENTS.AD_SHOW, payload };
     this.broadcasts?.emitToRoom(room.code, WS_EVENTS.AD_SHOW, payload);
     room.timer = setTimeout(() => {
       this.advance(room).catch((err) => this.logger.error(err));
@@ -751,6 +776,8 @@ export class GameService {
       roundTitle: question.roundTitle,
     };
     this.emitState(room);
+    room.lastQuestion = payload;
+    room.scene = { event: WS_EVENTS.QUESTION_SHOW, payload };
     this.broadcasts?.emitToRoom(room.code, WS_EVENTS.QUESTION_SHOW, payload);
 
     room.timer = setTimeout(() => {
@@ -805,6 +832,7 @@ export class GameService {
     };
 
     this.emitState(room);
+    room.scene = { event: WS_EVENTS.QUESTION_REVEAL, payload };
     this.broadcasts?.emitToRoom(room.code, WS_EVENTS.QUESTION_REVEAL, payload);
     room.timer = setTimeout(() => {
       this.advance(room).catch((err) => this.logger.error(err));
@@ -827,9 +855,17 @@ export class GameService {
     };
 
     this.emitState(room);
+    room.scene = { event: WS_EVENTS.GAME_OVER, payload };
     this.broadcasts?.emitToRoom(room.code, WS_EVENTS.GAME_OVER, payload);
+    this.scheduleNextLoop(room);
+  }
+
+  private scheduleNextLoop(room: LiveRoom) {
     room.timer = setTimeout(() => {
-      this.beginNextLoop(room).catch((err) => this.logger.error(err));
+      this.beginNextLoop(room).catch(err => {
+        this.logger.warn(String(err));
+        this.scheduleNextLoop(room);
+      });
     }, PODIUM_MS);
   }
 
@@ -837,9 +873,7 @@ export class GameService {
     if (room.status !== 'lobby') {
       throw new GameError('BAD_STATUS', 'Игру можно начать только из лобби');
     }
-    if ([...room.players.values()].filter((p) => p.connected).length < 1) {
-      throw new GameError('NO_PLAYERS', 'Нужен хотя бы один игрок');
-    }
+
     if (room.advancing) {
       throw new GameError('BUSY', 'Уже переключаем сцену');
     }
@@ -864,8 +898,7 @@ export class GameService {
       if (room.status !== 'lobby') {
         return;
       }
-      const ready = [...room.players.values()].filter((p) => p.connected).length;
-      if (ready < 1) {
+      if (!room.tvSocketIds.size && ![...room.players.values()].some(p => p.connected)) {
         return;
       }
       this.startGameInternal(room).catch((err) => this.logger.error(err));
@@ -874,7 +907,41 @@ export class GameService {
 
   private async beginNextLoop(room: LiveRoom) {
     this.clearTimer(room);
+    const playlist = await this.prisma.quiz.findMany({
+      where: { isPublished: true, rounds: { some: { questions: { some: {} } } } },
+      orderBy: [{ broadcastOrder: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
+      select: { id: true },
+    });
+    if (!playlist.length) throw new GameError('NO_QUIZ', 'Ожидаем публикации квиза');
+    const index = playlist.findIndex(quiz => quiz.id === room.quizId);
+    const next = await this.loadQuiz(playlist[(index + 1) % playlist.length].id);
+    await this.prisma.$transaction([
+      this.prisma.gameSession.update({
+        where: { id: room.sessionId },
+        data: {
+          quizId: next.id,
+          status: 'LOBBY',
+          finishedAt: null,
+          startedAt: null,
+          currentQuestionId: null,
+        },
+      }),
+      this.prisma.sessionPlayer.updateMany({
+        where: { sessionId: room.sessionId },
+        data: { score: 0, streak: 0, maxStreak: 0 },
+      }),
+    ]);
+    room.quizId = next.id;
+    room.quizTitle = next.title;
+    room.questions = next.questions;
+    room.timeline = next.timeline;
+    room.totalRounds = next.totalRounds;
+    room.roundIndex = 0;
+    room.cycle += 1;
+    room.scene = undefined;
+    room.lastQuestion = undefined;
     for (const player of room.players.values()) {
+      if (!player.connected) room.players.delete(player.id);
       player.score = 0;
       player.streak = 0;
       player.maxStreak = 0;
@@ -882,12 +949,7 @@ export class GameService {
       player.correctInRound = 0;
       player.hadPerfectRound = false;
       player.correctThisMatch = 0;
-      await this.prisma.sessionPlayer
-        .update({
-          where: { id: player.id },
-          data: { score: 0, streak: 0 },
-        })
-        .catch(() => undefined);
+      player.answeredThisMatch = false;
     }
     room.beatIndex = -1;
     room.currentIndex = -1;
@@ -896,13 +958,13 @@ export class GameService {
     room.currentOptions = [];
     room.currentAd = null;
     room.status = 'lobby';
-    await this.persistStatus(room, 'lobby');
+
     this.emitState(room);
     this.scheduleAutoStart(room);
   }
 
   private async persistCareer(room: LiveRoom) {
-    const ranked = this.playersPublic(room);
+    const ranked = this.playersPublic(room).filter(player => room.players.get(player.id)?.answeredThisMatch);
     const unlocked: Record<string, string[]> = {};
 
     for (let place = 0; place < ranked.length; place += 1) {
@@ -1024,16 +1086,6 @@ function shuffleColoredOptions(options: CachedOption[]): CachedOption[] {
     ...option,
     color: OPTION_COLORS[index % OPTION_COLORS.length],
   }));
-}
-
-function placeholderAd(roundTitle: string): CachedAd {
-  return {
-    title: 'Тут могла быть ваша реклама',
-    body: `Пауза после раунда «${roundTitle}». Здесь может быть ролик спонсора шоу.`,
-    mediaUrl: '',
-    cta: 'Стать спонсором',
-    durationSec: AD_MIN_SEC,
-  };
 }
 
 const quizInclude = {

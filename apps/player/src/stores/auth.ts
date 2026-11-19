@@ -31,7 +31,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function register(payload: { email: string; password: string; name: string }) {
     error.value = '';
-    const res = await api<{ accessToken: string; user: PublicUser; verifyUrl: string }>('/auth/register', {
+    const res = await api<{ accessToken: string; user: PublicUser }>('/auth/register', {
       method: 'POST',
       json: payload,
     });
@@ -63,7 +63,7 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function resend() {
-    return api<{ ok: boolean; verifyUrl: string }>('/auth/resend', { method: 'POST' });
+    return api<{ ok: boolean }>('/auth/resend', { method: 'POST' });
   }
 
   async function games() {

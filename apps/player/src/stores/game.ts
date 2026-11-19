@@ -54,6 +54,7 @@ export const useGameStore = defineStore('game', () => {
   function bind() {
     socket.on('connect', () => {
       connected.value = true;
+      if (room.value && token.value) void join(room.value.code, nickname.value);
     });
     socket.on('disconnect', () => {
       connected.value = false;
@@ -105,6 +106,10 @@ export const useGameStore = defineStore('game', () => {
 
     room.value = ack.data.state;
     playerId.value = ack.data.playerId ?? null;
+    if (ack.data.state.status === 'question' && ack.data.pickedOptionId) {
+      locked.value = true;
+      pickedOptionId.value = ack.data.pickedOptionId;
+    }
     if (ack.data.token) {
       token.value = ack.data.token;
       localStorage.setItem(TOKEN_KEY, ack.data.token);

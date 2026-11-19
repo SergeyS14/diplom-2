@@ -79,9 +79,12 @@ export class StudioService {
   async updateQuiz(
     user: AuthUser,
     quizId: string,
-    dto: { title?: string; description?: string; defaultQuestionTime?: number; isPublished?: boolean },
+    dto: { title?: string; description?: string; defaultQuestionTime?: number; broadcastOrder?: number; isPublished?: boolean },
   ) {
     await this.ownedQuiz(user, quizId);
+    if (dto.broadcastOrder !== undefined && (!Number.isInteger(dto.broadcastOrder) || dto.broadcastOrder < 1 || dto.broadcastOrder > 9999)) {
+      throw new BadRequestException('Позиция эфира должна быть от 1 до 9999');
+    }
     if (dto.isPublished) {
       const full = await this.get(user, quizId);
       const questions = full.rounds.flatMap((r) => r.questions);
@@ -106,6 +109,7 @@ export class StudioService {
         ...(dto.title !== undefined ? { title: dto.title.trim().slice(0, 80) } : {}),
         ...(dto.description !== undefined ? { description: dto.description } : {}),
         ...(dto.defaultQuestionTime !== undefined ? { defaultQuestionTime: dto.defaultQuestionTime } : {}),
+        ...(dto.broadcastOrder !== undefined ? { broadcastOrder: dto.broadcastOrder } : {}),
         ...(dto.isPublished !== undefined ? { isPublished: dto.isPublished } : {}),
       },
     });
@@ -236,6 +240,7 @@ export class StudioService {
     dto: {
       text?: string;
       hint?: string | null;
+      mediaUrl?: string | null;
       timeLimit?: number;
       points?: number;
       type?: 'SINGLE' | 'TRUE_FALSE';
@@ -251,6 +256,20 @@ export class StudioService {
     }
     await this.ownedQuiz(user, question.round.quizId);
 
+    let mediaUrl: string | null | undefined;
+    if (dto.mediaUrl !== undefined) {
+      if (dto.mediaUrl !== null && typeof dto.mediaUrl !== 'string') {
+        throw new BadRequestException('Укажите ссылку на изображение');
+      }
+      mediaUrl = dto.mediaUrl?.trim() || null;
+      if (mediaUrl) {
+        const url = URL.canParse(mediaUrl) ? new URL(mediaUrl) : null;
+        if (!url || !['https:', 'http:'].includes(url.protocol)) {
+          throw new BadRequestException('Ссылка на изображение должна начинаться с https:// или http://');
+        }
+      }
+    }
+
     if (dto.options) {
       if (dto.options.length < 2 || dto.options.length > 4) {
         throw new BadRequestException('Вариантов должно быть от 2 до 4');
@@ -258,22 +277,20 @@ export class StudioService {
       if (!dto.options.some((o) => o.isCorrect)) {
         throw new BadRequestException('Отметь верный вариант');
       }
-      await this.prisma.questionOption.deleteMany({ where: { questionId } });
-      await this.prisma.questionOption.createMany({
-        data: dto.options.map((o, i) => ({
-          questionId,
-          text: o.text.trim() || `Вариант ${i + 1}`,
-          isCorrect: o.isCorrect,
-          order: i + 1,
-          color: o.color || OPTION_COLORS[i % OPTION_COLORS.length],
-        })),
-      });
     }
 
     await this.prisma.question.update({
       where: { id: questionId },
       data: {
+        ...(dto.options ? { options: {
+          deleteMany: {},
+          create: dto.options.map((option, i) => ({
+            text: option.text.trim() || `Вариант ${i + 1}`,
+            isCorrect: option.isCorrect, order: i + 1, color: option.color || OPTION_COLORS[i % OPTION_COLORS.length],
+          })),
+        } } : {}),
         ...(dto.text !== undefined ? { text: dto.text } : {}),
+        ...(mediaUrl !== undefined ? { mediaUrl } : {}),
         ...(dto.hint !== undefined ? { hint: dto.hint?.trim() || null } : {}),
         ...(dto.timeLimit !== undefined ? { timeLimit: dto.timeLimit } : {}),
         ...(dto.points !== undefined ? { points: dto.points } : {}),
@@ -303,18 +320,25 @@ export class StudioService {
     });
   }
 
+  private validateDuration(seconds?: number) {
+    if (seconds !== undefined && (!Number.isInteger(seconds) || seconds < 1 || seconds > 3600)) {
+      throw new BadRequestException('Длительность рекламы должна быть от 1 до 3600 секунд');
+    }
+  }
+
   async createAd(
     user: AuthUser,
     dto: { title: string; body?: string; mediaUrl?: string; durationSec?: number; cta?: string },
   ) {
     await this.assertHost(user);
+    this.validateDuration(dto.durationSec);
     return this.prisma.ad.create({
       data: {
         ownerId: user.id,
         title: (dto.title || 'Реклама').trim(),
         body: dto.body?.trim() || 'Пауза на рекламу',
         mediaUrl: dto.mediaUrl?.trim() || '',
-        durationSec: Math.max(Number(dto.durationSec) || 14, 12),
+        durationSec: dto.durationSec ?? 14,
         cta: dto.cta?.trim() || null,
         type: 'IMAGE',
       },
@@ -330,6 +354,7 @@ export class StudioService {
     if (!ad || (ad.ownerId !== user.id && user.role !== 'ADMIN')) {
       throw new ForbiddenException('Нет доступа к рекламе');
     }
+    this.validateDuration(dto.durationSec);
     return this.prisma.ad.update({
       where: { id: adId },
       data: {

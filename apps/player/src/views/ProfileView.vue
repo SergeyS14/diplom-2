@@ -46,6 +46,20 @@ const labels: Record<string, string> = {
   beard: 'борода',
 };
 
+const sections = [
+  { key: 'eyes', title: 'Глаза', options: AVATAR_EYES },
+  { key: 'mouth', title: 'Улыбка', options: AVATAR_MOUTHS },
+  { key: 'hair', title: 'Причёска', options: AVATAR_HAIR },
+  { key: 'glasses', title: 'Очки', options: AVATAR_GLASSES },
+  { key: 'facial', title: 'Усы и борода', options: AVATAR_FACIAL },
+] as const;
+const active = ref(0);
+const section = computed(() => sections[active.value]!);
+function choose(item: string) {
+  Object.assign(avatar, { [section.value.key]: item });
+  saved.value = '';
+}
+
 const myMedals = computed(() =>
   ACHIEVEMENTS.filter((a) => auth.user?.medals.includes(a.id)),
 );
@@ -77,8 +91,8 @@ async function save() {
 }
 
 async function resend() {
-  const res = await auth.resend();
-  saved.value = `Ссылка: ${res.verifyUrl}`;
+  await auth.resend();
+  saved.value = 'Проверь почту или уведомления';
 }
 
 function randomize() {
@@ -112,45 +126,25 @@ function randomize() {
       </div>
     </div>
 
-    <h2 class="mt-8 text-xl font-black">Конструктор аватарки</h2>
+    <h2 class="mt-8 text-xl font-black">Мой аватар</h2>
     <div class="mt-3 space-y-3 text-sm">
       <div>
         <p class="mb-1 text-white/60">Кожа</p>
         <button
-          v-for="skin in AVATAR_SKINS"
+          v-for="(skin, i) in AVATAR_SKINS"
+          :aria-label="'Тон кожи ' + (i + 1)" :aria-pressed="avatar.skin === skin"
           :key="skin"
           class="mr-2 h-8 w-8 rounded-full border-2"
           :style="{ background: skin, borderColor: avatar.skin === skin ? '#fff' : 'transparent' }"
           @click="avatar.skin = skin"
         />
       </div>
-      <div>
-        <p class="mb-1 text-white/60">Глаза</p>
-        <button v-for="item in AVATAR_EYES" :key="item" class="mr-2 rounded-full bg-white/15 px-3 py-1" @click="avatar.eyes = item">
-          {{ labels[item] }}
-        </button>
+      <div class="flex flex-wrap gap-2" aria-label="Черты лица">
+        <button v-for="(part, i) in sections" :key="part.key" class="rounded-full px-4 py-2" :class="active === i ? 'bg-white text-purple-950' : 'bg-white/10'" :aria-pressed="active === i" @click="active = i">{{ part.title }}</button>
       </div>
-      <div>
-        <p class="mb-1 text-white/60">Рот</p>
-        <button v-for="item in AVATAR_MOUTHS" :key="item" class="mr-2 rounded-full bg-white/15 px-3 py-1" @click="avatar.mouth = item">
-          {{ labels[item] }}
-        </button>
-      </div>
-      <div>
-        <p class="mb-1 text-white/60">Волосы</p>
-        <button v-for="item in AVATAR_HAIR" :key="item" class="mr-2 rounded-full bg-white/15 px-3 py-1" @click="avatar.hair = item">
-          {{ labels[item] }}
-        </button>
-      </div>
-      <div>
-        <p class="mb-1 text-white/60">Очки</p>
-        <button v-for="item in AVATAR_GLASSES" :key="item" class="mr-2 rounded-full bg-white/15 px-3 py-1" @click="avatar.glasses = item">
-          {{ labels[item] }}
-        </button>
-      </div>
-      <div>
-        <p class="mb-1 text-white/60">Усы / борода</p>
-        <button v-for="item in AVATAR_FACIAL" :key="item" class="mr-2 rounded-full bg-white/15 px-3 py-1" @click="avatar.facial = item">
+      <div class="grid grid-cols-3 gap-2 sm:grid-cols-5">
+        <button v-for="item in section.options" :key="item" class="flex flex-col items-center rounded-2xl border-2 p-2" :class="avatar[section.key] === item ? 'border-yellow-300 bg-white/20' : 'border-transparent bg-white/10'" :aria-pressed="avatar[section.key] === item" @click="choose(item)">
+          <AvatarFace :avatar="{ ...avatar, [section.key]: item }" :size="56" />
           {{ labels[item] }}
         </button>
       </div>

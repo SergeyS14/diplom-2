@@ -80,6 +80,12 @@ export class GameGateway implements OnGatewayInit, OnGatewayDisconnect {
     return this.wrap(async () => {
       const result = await this.game.joinRoom(client.id, body);
       await client.join(this.roomName(result.state.code));
+      const room = this.game.getRoomBySocket(client.id);
+      const scene = room?.scene;
+      if (body.role === 'tv' && scene?.event === WS_EVENTS.QUESTION_REVEAL && room?.lastQuestion) {
+        client.emit(WS_EVENTS.QUESTION_SHOW, room.lastQuestion);
+      }
+      if (scene) client.emit(scene.event, scene.payload);
       return result;
     });
   }

@@ -1,23 +1,17 @@
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { DEFAULT_AVATAR, OPTION_COLORS } from '@quiz/shared';
 
-const prisma = new PrismaClient();
+const client = new PrismaClient();
 
 async function main() {
-  await prisma.sessionAnswer.deleteMany();
-  await prisma.sessionPlayer.deleteMany();
-  await prisma.gameSession.deleteMany();
-  await prisma.gameResult.deleteMany();
-  await prisma.userAchievement.deleteMany();
-  await prisma.pushSubscription.deleteMany();
-  await prisma.questionOption.deleteMany();
-  await prisma.question.deleteMany();
-  await prisma.round.deleteMany();
-  await prisma.quiz.deleteMany();
-  await prisma.ad.deleteMany();
-  await prisma.user.deleteMany();
+  await client.$transaction(async prisma => {
+    if (await prisma.user.count()) return;
+    await populate(prisma);
+  });
+}
 
+async function populate(prisma: Prisma.TransactionClient) {
   const passwordHash = await bcrypt.hash('diplom123', 10);
 
   const admin = await prisma.user.create({
@@ -240,6 +234,37 @@ async function main() {
     },
   });
 
+  await prisma.quiz.create({
+    data: {
+      title: 'Музыкальный блиц',
+      ownerId: admin.id,
+      isPublished: true,
+      broadcastOrder: 200,
+      rounds: {
+        create: {
+          title: 'Инструменты',
+          order: 1,
+          type: 'LIGHTNING',
+          questions: {
+            create: {
+              text: 'У какого инструмента обычно 88 клавиш?',
+              order: 1,
+              timeLimit: 15,
+              points: 1500,
+              options: {
+                create: [
+                  { text: 'Фортепиано', isCorrect: true, order: 1 },
+                  { text: 'Скрипка', isCorrect: false, order: 2 },
+                  { text: 'Флейта', isCorrect: false, order: 3 },
+                ],
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+
   console.log('Seed OK: player@quiz.local / diplom123, admin@quiz.local / diplom123. ТВ-пароль: show123');
 }
 
@@ -249,5 +274,5 @@ main()
     process.exit(1);
   })
   .finally(async () => {
-    await prisma.$disconnect();
+    await client.$disconnect();
   });
